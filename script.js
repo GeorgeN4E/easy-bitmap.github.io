@@ -143,51 +143,96 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function getDimensionsForType(type) {
-        switch(type) {
-            case 'uint8_t': return [8,8]
-            case 'uint16_t': return [16,16]
-            case 'uint32_t': return [32,32]
-            case 'uint64_t': return [64,64]
-            default: return [8,8]
+    const customDimensionsDiv = document.getElementById('custom-dimensions');
+    const customWidthInput = document.getElementById('custom-width');
+    const customHeightInput = document.getElementById('custom-height');
+    const applyCustomSizeButton = document.getElementById('apply-custom-size');
+
+    // Show/hide custom dimension fields
+    bitmapTypeSelect.addEventListener('change', () => {
+        if (bitmapTypeSelect.value === 'custom') {
+            customDimensionsDiv.style.display = 'block';
+        } else {
+            customDimensionsDiv.style.display = 'none';
+            createGrid(); // Update grid immediately when switching types
         }
-    }
+    });
 
+    // Apply custom dimensions when clicking "Apply"
+    applyCustomSizeButton.addEventListener('click', () => {
+        if (bitmapTypeSelect.value === 'custom') {
+            createGrid();
+        }
+    });
+    
     function getTypeForBits(totalBits) {
-        if (totalBits === 64) return 'uint8_t'
-        if (totalBits === 256) return 'uint16_t'
-        if (totalBits === 1024) return 'uint32_t'
-        if (totalBits === 4096) return 'uint64_t'
-        return null
-    }
+        if (totalBits === 64) return 'uint8_t';
+        if (totalBits === 256) return 'uint16_t';
+        if (totalBits === 1024) return 'uint32_t';
+        if (totalBits === 4096) return 'uint64_t';
 
-    function createGrid() {
-        [gridWidth, gridHeight] = getDimensionsForType(bitmapTypeSelect.value)
-        penSize = parseInt(penSizeSlider.value)
-        penSizeValue.textContent = penSize
-        gridContainer.innerHTML = ''
-
-        const maxWidth = window.innerWidth * 0.9 
-        const maxHeight = window.innerHeight * 0.6 
-        const cellSizeX = Math.floor(maxWidth / gridWidth)
-        const cellSizeY = Math.floor(maxHeight / gridHeight)
-        const cellSize = Math.min(cellSizeX, cellSizeY)
-        gridContainer.style.width = (gridWidth * cellSize) + 'px'
-        gridContainer.style.height = (gridHeight * cellSize) + 'px'
-
-        for (let y = 0; y < gridHeight; y++) {
-            for (let x = 0; x < gridWidth; x++) {
-                const cell = document.createElement('div')
-                cell.classList.add('cell')
-                cell.dataset.x = x
-                cell.dataset.y = y
-                cell.style.width = cell.style.height = cellSize + 'px'
-                gridContainer.appendChild(cell)
+        // If totalBits doesn't match a predefined size, assume it's custom
+        for (let w = 1; w <= 100; w++) {
+            for (let h = 1; h <= 100; h++) {
+                if (w * h === totalBits) {
+                    return 'custom';
+                }
             }
         }
 
-        cppCodeContainer.style.display = 'none'
+        return null; // No valid size found
     }
+
+
+    // Update getDimensionsForType() to support custom size
+    function getDimensionsForType(type) {
+        if (type === 'uint8_t') return [8, 8];
+        if (type === 'uint16_t') return [16, 16];
+        if (type === 'uint32_t') return [32, 32];
+        if (type === 'uint64_t') return [64, 64];
+        if (type === 'custom') {
+            return [
+                Math.max(1, Math.min(100, parseInt(customWidthInput.value) || 8)), 
+                Math.max(1, Math.min(100, parseInt(customHeightInput.value) || 8))
+            ];
+        }
+        return [8, 8]; // Default fallback
+    }
+
+    // Update grid creation
+    function createGrid() {
+        let [newWidth, newHeight] = getDimensionsForType(bitmapTypeSelect.value);
+        
+        gridWidth = newWidth;
+        gridHeight = newHeight;
+
+        penSize = parseInt(penSizeSlider.value);
+        penSizeValue.textContent = penSize;
+        gridContainer.innerHTML = '';
+
+        const maxWidth = window.innerWidth * 0.9;
+        const maxHeight = window.innerHeight * 0.6;
+        const cellSizeX = Math.floor(maxWidth / gridWidth);
+        const cellSizeY = Math.floor(maxHeight / gridHeight);
+        const cellSize = Math.min(cellSizeX, cellSizeY);
+        
+        gridContainer.style.width = (gridWidth * cellSize) + 'px';
+        gridContainer.style.height = (gridHeight * cellSize) + 'px';
+
+        for (let y = 0; y < gridHeight; y++) {
+            for (let x = 0; x < gridWidth; x++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                cell.dataset.x = x;
+                cell.dataset.y = y;
+                cell.style.width = cell.style.height = cellSize + 'px';
+                gridContainer.appendChild(cell);
+            }
+        }
+
+        cppCodeContainer.style.display = 'none';
+    }
+
 
     function updatePenSize() {
         penSize = parseInt(penSizeSlider.value)
@@ -416,16 +461,29 @@ document.addEventListener('DOMContentLoaded', () => {
         if (arrayMatch) code = arrayMatch[1]
         let bytes = code.split(',').map(b => b.trim()).filter(b=>b!=='')
         const totalBits = bytes.length * 8
-        const expectedType = getTypeForBits(totalBits)
+        const expectedType = getTypeForBits(totalBits);
         if (!expectedType) {
             showMessageModal(
                 currentLanguage === 'en' ? 'Error' : 'Ошибка',
                 currentLanguage === 'en' ? 'Cannot adjust bitmap size automatically.' : 'Невозможно автоматически определить размер.'
-            )
-            return
+            );
+            return;
         }
-        bitmapTypeSelect.value = expectedType
-        createGrid()
+
+        // If detected as "custom", set custom width & height
+        if (expectedType === "custom") {
+            const width = Math.sqrt(totalBits);
+            const height = totalBits / width;
+            
+            customWidthInput.value = width;
+            customHeightInput.value = height;
+            
+            bitmapTypeSelect.value = "custom";
+        }
+
+        // Set grid size and create it
+        createGrid();
+
         const cells = gridContainer.getElementsByClassName('cell')
         let bitIndex = 0
         for (let byte of bytes) {
