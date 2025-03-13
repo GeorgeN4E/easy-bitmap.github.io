@@ -22,15 +22,19 @@
         </select>
 
         <!-- Custom width/height inputs (hidden by default) -->
-        <div id="custom-dimensions">
+        <div id="custom-dimensions" style="display: none;">
             <label for="custom-width">Width:</label>
             <input type="number" id="custom-width" min="1" max="100" value="40">
-            
+
             <label for="custom-height">Height:</label>
             <input type="number" id="custom-height" min="1" max="100" value="40">
             
+            <label for="auto-detect">Auto Adjust:</label>
+            <input type="checkbox" id="auto-detect" checked>
+
             <button id="apply-custom-size">Apply</button>
         </div>
+
 
         <label for="pen-size" id="pen-size-label">Pen Size:</label>
         <input type="range" id="pen-size" min="1" max="10" value="1">

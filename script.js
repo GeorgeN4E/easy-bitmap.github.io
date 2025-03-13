@@ -164,7 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
             createGrid();
         }
     });
-    
+
     function getTypeForBits(totalBits) {
         if (totalBits === 64) return 'uint8_t';
         if (totalBits === 256) return 'uint16_t';
@@ -172,8 +172,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (totalBits === 4096) return 'uint64_t';
 
         // If totalBits doesn't match a predefined size, assume it's custom
-        for (let w = 1; w <= 100; w++) {
-            for (let h = 1; h <= 100; h++) {
+        for (let w = 1; w <= 200; w++) {
+            for (let h = 1; h <= 200; h++) {
                 if (w * h === totalBits) {
                     return 'custom';
                 }
@@ -202,22 +202,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // Update grid creation
     function createGrid() {
         let [newWidth, newHeight] = getDimensionsForType(bitmapTypeSelect.value);
-        
+
         gridWidth = newWidth;
         gridHeight = newHeight;
 
-        penSize = parseInt(penSizeSlider.value);
-        penSizeValue.textContent = penSize;
-        gridContainer.innerHTML = '';
-
         const maxWidth = window.innerWidth * 0.9;
         const maxHeight = window.innerHeight * 0.6;
-        const cellSizeX = Math.floor(maxWidth / gridWidth);
-        const cellSizeY = Math.floor(maxHeight / gridHeight);
-        const cellSize = Math.min(cellSizeX, cellSizeY);
-        
-        gridContainer.style.width = (gridWidth * cellSize) + 'px';
-        gridContainer.style.height = (gridHeight * cellSize) + 'px';
+        const cellSize = Math.min(Math.floor(maxWidth / gridWidth), Math.floor(maxHeight / gridHeight));
+
+        gridContainer.innerHTML = '';
+        gridContainer.style.width = `${gridWidth * cellSize}px`;
+        gridContainer.style.height = `${gridHeight * cellSize}px`;
 
         for (let y = 0; y < gridHeight; y++) {
             for (let x = 0; x < gridWidth; x++) {
@@ -225,13 +220,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 cell.classList.add('cell');
                 cell.dataset.x = x;
                 cell.dataset.y = y;
-                cell.style.width = cell.style.height = cellSize + 'px';
+                cell.style.width = cell.style.height = `${cellSize}px`;
                 gridContainer.appendChild(cell);
             }
         }
-
-        cppCodeContainer.style.display = 'none';
     }
+
 
 
     function updatePenSize() {
@@ -447,68 +441,71 @@ document.addEventListener('DOMContentLoaded', () => {
         })
     }
 
+    const autoDetectCheckbox = document.getElementById('auto-detect');
+
     function importBitmap() {
-        const input = importTextarea.value.trim()
+        const input = importTextarea.value.trim();
         if (!input) {
-            showMessageModal(
-                currentLanguage === 'en' ? 'Error' : 'Ошибка',
-                currentLanguage === 'en' ? 'Please enter the bitmap code.' : 'Пожалуйста, введите код битмапа.'
-            )
-            return
-        }
-        let code = input
-        const arrayMatch = input.match(/\{([\s\S]*?)\}/)
-        if (arrayMatch) code = arrayMatch[1]
-        let bytes = code.split(',').map(b => b.trim()).filter(b=>b!=='')
-        const totalBits = bytes.length * 8
-        const expectedType = getTypeForBits(totalBits);
-        if (!expectedType) {
-            showMessageModal(
-                currentLanguage === 'en' ? 'Error' : 'Ошибка',
-                currentLanguage === 'en' ? 'Cannot adjust bitmap size automatically.' : 'Невозможно автоматически определить размер.'
-            );
+            showMessageModal("Error", "Please enter the bitmap code.");
             return;
         }
 
-        // If detected as "custom", set custom width & height
-        if (expectedType === "custom") {
-            const width = Math.sqrt(totalBits);
-            const height = totalBits / width;
-            
-            customWidthInput.value = width;
-            customHeightInput.value = height;
-            
+        let match = input.match(/\{([\s\S]*?)\}/);
+        if (!match || !match[1]) {
+            showMessageModal("Error", "Invalid bitmap format. Please include curly braces { }.");
+            return;
+        }
+        
+        let code = match[1];
+        let bytes = code.split(',').map(b => b.trim()).filter(b => b !== '');
+
+        if (bytes.length === 0) {
+            showMessageModal("Error", "Bitmap data is empty or invalid.");
+            return;
+        }
+
+        const totalBits = bytes.length * 8;
+        let expectedType = getTypeForBits(totalBits);
+
+        if (!expectedType) {
+            showMessageModal("Error", "Cannot adjust bitmap size automatically.");
+            return;
+        }
+
+        if (expectedType === "custom" && autoDetectCheckbox.checked) {
+            let width = Math.sqrt(totalBits);
+            let height = totalBits / width;
+
+            customWidthInput.value = Math.floor(width);
+            customHeightInput.value = Math.floor(height);
             bitmapTypeSelect.value = "custom";
         }
 
-        // Set grid size and create it
         createGrid();
 
-        const cells = gridContainer.getElementsByClassName('cell')
-        let bitIndex = 0
-        for (let byte of bytes) {
-            byte = byte.replace(/0x/i, '')
-            let byteValue = parseInt(byte, 16)
+        const cells = gridContainer.getElementsByClassName('cell');
+        let bitIndex = 0;
+
+        for (let byteIndex = 0; byteIndex < bytes.length; byteIndex++) {
+            let byteValue = parseInt(bytes[byteIndex].replace(/0x/i, ''), 16);
+
             for (let i = 7; i >= 0; i--) {
-                if (bitIndex >= cells.length) break
-                const cell = cells[bitIndex]
-                const isActive = (byteValue >> i) & 1
-                if (isActive) {
-                    recordChange(cell, false)
-                    cell.classList.add('active')
-                } else {
-                    recordChange(cell, true)
-                    cell.classList.remove('active')
-                }
-                bitIndex++
+                if (bitIndex >= cells.length) break;
+                const isActive = (byteValue >> i) & 1;
+
+                const cell = cells[bitIndex];
+                if (isActive) cell.classList.add('active');
+                else cell.classList.remove('active');
+
+                bitIndex++;
             }
         }
-        closeModal(importModal)
-        showMessageModal(
-            currentLanguage === 'en' ? 'Success' : 'Успех',
-            currentLanguage === 'en' ? 'Bitmap imported successfully!' : 'Битмап успешно импортирован!'
-        )
+
+        showMessageModal("Success", "Bitmap imported successfully!");
     }
+
+
+
 
     function showMessageModal(title, text) {
         messageModalTitle.textContent = title
